@@ -6,6 +6,11 @@ an embedded SQLite database — no separate database server needed.
 The whole app is one FastAPI process that serves both the JSON API and the web
 UI (vanilla HTML/CSS/JS, no build step).
 
+![Garden Planner — a raised bed and a container planted with veg](docs/screenshot-garden.jpg)
+
+Draw raised beds and containers on a grid, then drag-and-drop plants into them
+to see what's planted where at a glance.
+
 > ⚠️ **Security: LAN-only.** This app has **no authentication** — anyone who can
 > reach it can read and edit your data. It's designed to run on a trusted home
 > network. **Do not expose it directly to the internet.** If you need remote
