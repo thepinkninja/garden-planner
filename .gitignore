@@ -1,0 +1,21 @@
+# Database / data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local tooling / agent config (may contain machine-specific paths)
+.claude/

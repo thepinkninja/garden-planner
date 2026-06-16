@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Garden Planner</title>
+  <link rel="stylesheet" href="/static/style.css?v=5"/>
+</head>
+<body>
+
+<div class="app">
+  <header class="app-header">
+    <span class="logo">🥦 Garden Planner</span>
+    <div class="garden-selector" id="garden-selector"></div>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="garden">🌱 Garden</button>
+    <button class="tab-btn" data-tab="tasks">📋 Tasks</button>
+    <button class="tab-btn" data-tab="plants">🌿 Plants</button>
+    <button class="tab-btn" data-tab="seasonal">📅 Calendar</button>
+    <button class="tab-btn" data-tab="settings">⚙️ Settings</button>
+  </nav>
+
+  <main class="app-main">
+    <div id="view-garden" class="view"></div>
+    <div id="view-tasks" class="view hidden"></div>
+    <div id="view-plants" class="view hidden"></div>
+    <div id="view-seasonal" class="view hidden"></div>
+    <div id="view-settings" class="view hidden"></div>
+  </main>
+</div>
+
+<!-- Modals -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div id="modal-content" class="modal"></div>
+</div>
+
+<script src="/static/app.js?v=8"></script>
+</body>
+</html>

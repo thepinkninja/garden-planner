@@ -1,0 +1,11 @@
+# Don't bake local data or caches into the image
+data/
+**/__pycache__/
+*.pyc
+*.db
+*.sqlite
+*.sqlite3
+.git/
+.gitignore
+README.md
+.claude/

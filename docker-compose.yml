@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: garden-planner
+    ports:
+      - "8079:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - DATABASE_URL=sqlite:////data/garden.db
+    restart: unless-stopped
+
+# Unraid note: if launching via the Compose Manager plugin, the relative
+# "./data" and "context: ." can resolve unexpectedly. Use absolute paths
+# instead, e.g.:
+#   build: { context: /mnt/user/appdata/garden-planner, dockerfile: Dockerfile }
+#   volumes: [ /mnt/user/appdata/garden-planner/data:/data ]
