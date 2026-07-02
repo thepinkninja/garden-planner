@@ -15,7 +15,7 @@ def seed_plants(db):
     if existing > 0:
         return
     data_path = os.path.join(os.path.dirname(__file__), "data", "plants.json")
-    with open(data_path) as f:
+    with open(data_path, encoding="utf-8") as f:  # explicit: Windows defaults to cp1252
         plants = json.load(f)
     for p in plants:
         db.add(models.PlantSpecies(**p, is_custom=False))
@@ -152,7 +152,27 @@ if not os.path.exists(static_dir):
     static_dir = "/app/static"
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, HTMLResponse
+    import re
+
     @app.get("/", include_in_schema=False)
     def serve_root():
-        return FileResponse(os.path.join(static_dir, "index.html"))
+        # Inject each asset's modification time as its cache-bust version, so
+        # browsers always fetch fresh JS/CSS after an edit — no manual ?v=N bumps.
+        with open(os.path.join(static_dir, "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        for fname in ("app.js", "style.css"):
+            path = os.path.join(static_dir, fname)
+            if os.path.exists(path):
+                v = str(int(os.path.getmtime(path)))
+                html = re.sub(
+                    rf"/static/{re.escape(fname)}(\?v=\w+)?",
+                    f"/static/{fname}?v={v}",
+                    html,
+                )
+        return HTMLResponse(html)
+
+    @app.get("/sw.js", include_in_schema=False)
+    def serve_sw():
+        # Service worker must be served from the root so its scope covers "/"
+        return FileResponse(os.path.join(static_dir, "sw.js"), media_type="application/javascript")

@@ -117,7 +117,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .tasks-date{font-size:.85rem;color:var(--text-muted);margin-bottom:16px}
 .task-group{margin-bottom:24px}
 .task-group h2{font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;letter-spacing:.06em}
-.task-card{display:flex;gap:10px;padding:10px 14px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--border);border-radius:var(--radius);margin-bottom:6px}
+.task-card{display:flex;gap:10px;padding:10px 14px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--border);border-radius:var(--radius);margin-bottom:6px;align-items:center}
+.task-body{flex:1}
+.task-done-btn{flex-shrink:0;font-size:1rem;min-width:36px;min-height:36px}
 .task-card.now{border-left-color:#dc2626}
 .task-card.soon{border-left-color:#f59e0b}
 .task-card.routine{border-left-color:var(--green)}

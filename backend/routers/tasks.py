@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import date, timedelta
 from typing import Optional
 from database import get_db
-from models import PlantPlacement, Bed, SeasonalTask, AppSettings
+from models import PlantPlacement, Bed, SeasonalTask, AppSettings, TaskCompletion
 from schemas import TaskItem, SeasonalTaskCreate, SeasonalTaskOut, SeasonalTaskUpdate
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -14,7 +14,15 @@ def _get_setting(db, key, default=None):
     return s.value if s else default
 
 
-def _generate_plant_tasks(db: Session, today: date, garden_id: Optional[int]) -> list[TaskItem]:
+def _latest_completions(db: Session) -> dict:
+    """Latest completion date per task key."""
+    latest = {}
+    for c in db.query(TaskCompletion).order_by(TaskCompletion.completed_date).all():
+        latest[c.key] = c.completed_date
+    return latest
+
+
+def _generate_plant_tasks(db: Session, today: date, garden_id: Optional[int], done: dict) -> list[TaskItem]:
     tasks = []
 
     query = db.query(PlantPlacement).join(Bed)
@@ -54,23 +62,31 @@ def _generate_plant_tasks(db: Session, today: date, garden_id: Optional[int]) ->
                     plant_name=sp.name,
                 ))
 
-        # Feeding tasks
+        # Feeding tasks — scheduled from the last ticked-off feed when there is
+        # one, otherwise from 14 days after planting.
         if sp.feeding_frequency_days and sp.feeding_notes:
-            next_feed = p.planted_date + timedelta(days=14)
-            while next_feed < today - timedelta(days=sp.feeding_frequency_days):
-                next_feed += timedelta(days=sp.feeding_frequency_days)
+            feed_key = f"feed:{p.id}"
+            last_fed = done.get(feed_key)
+            if last_fed:
+                next_feed = last_fed + timedelta(days=sp.feeding_frequency_days)
+            else:
+                next_feed = p.planted_date + timedelta(days=14)
             days_until_feed = (next_feed - today).days
             if days_until_feed <= 0:
+                overdue = -days_until_feed
                 tasks.append(TaskItem(
                     type="feed",
                     title=f"Feed {sp.name}",
-                    description=f"{sp.feeding_notes} ({bed_name})",
+                    description=(f"Overdue by {overdue} days. " if overdue > 0 else "") + f"{sp.feeding_notes} ({bed_name})",
                     urgency="now",
                     placement_id=p.id,
                     bed_name=bed_name,
                     plant_name=sp.name,
+                    key=feed_key,
                 ))
-            elif days_until_feed <= 7:
+            # Short heads-up window: must be < the shortest feed frequency,
+            # or a just-ticked weekly feed instantly reappears as "soon"
+            elif days_until_feed <= 2:
                 tasks.append(TaskItem(
                     type="feed",
                     title=f"Feed {sp.name} soon",
@@ -79,19 +95,24 @@ def _generate_plant_tasks(db: Session, today: date, garden_id: Optional[int]) ->
                     placement_id=p.id,
                     bed_name=bed_name,
                     plant_name=sp.name,
+                    key=feed_key,
                 ))
 
-        # Watering reminders — weekly nudge
-        if sp.watering_notes and today.weekday() == 0:
-            tasks.append(TaskItem(
-                type="water",
-                title=f"Water {sp.name}",
-                description=f"{sp.watering_notes} ({bed_name})",
-                urgency="routine",
-                placement_id=p.id,
-                bed_name=bed_name,
-                plant_name=sp.name,
-            ))
+        # Watering reminders — appears when not ticked off in the last 7 days
+        if sp.watering_notes:
+            water_key = f"water:{p.id}"
+            last_watered = done.get(water_key)
+            if not last_watered or (today - last_watered).days >= 7:
+                tasks.append(TaskItem(
+                    type="water",
+                    title=f"Water {sp.name}",
+                    description=f"{sp.watering_notes} ({bed_name})",
+                    urgency="routine",
+                    placement_id=p.id,
+                    bed_name=bed_name,
+                    plant_name=sp.name,
+                    key=water_key,
+                ))
 
     return tasks
 
@@ -102,27 +123,44 @@ def get_tasks(
     db: Session = Depends(get_db),
 ):
     today = date.today()
-    tasks = _generate_plant_tasks(db, today, garden_id)
+    done = _latest_completions(db)
+    tasks = _generate_plant_tasks(db, today, garden_id, done)
 
-    # Seasonal tasks for this month and next
+    # Seasonal tasks for this month and next — tickable once per month
     current_month = today.month
     next_month = (current_month % 12) + 1
+    next_month_year = today.year + (1 if next_month < current_month else 0)
     seasonal = db.query(SeasonalTask).filter(
         SeasonalTask.month.in_([current_month, next_month])
     ).all()
     for s in seasonal:
+        year = today.year if s.month == current_month else next_month_year
+        key = f"seasonal:{s.id}:{year}-{s.month:02d}"
+        if key in done:
+            continue  # already ticked off for this month
         urgency = "now" if s.month == current_month else "soon"
         tasks.append(TaskItem(
             type="seasonal",
             title=s.name,
             description=s.description or "",
             urgency=urgency,
+            key=key,
         ))
 
     # Sort: now → soon → routine
     order = {"now": 0, "soon": 1, "routine": 2}
     tasks.sort(key=lambda t: order.get(t.urgency, 3))
     return tasks
+
+
+@router.post("/complete")
+def complete_task(data: dict, db: Session = Depends(get_db)):
+    key = (data or {}).get("key")
+    if not key:
+        raise HTTPException(400, "key required")
+    db.add(TaskCompletion(key=key, completed_date=date.today()))
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/succession/{placement_id}", response_model=list[dict])

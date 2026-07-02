@@ -113,6 +113,7 @@ const api = {
   updateSpecies:        (id,d) => api.req('PATCH',`/species/${id}`, d),
   deleteSpecies:        (id)   => api.req('DELETE',`/species/${id}`),
   getTasks:             (gid)  => api.req('GET',  `/tasks/${gid?'?garden_id='+gid:''}`),
+  completeTask:         (key)  => api.req('POST', '/tasks/complete', {key}),
   getSuccession:        (pid)  => api.req('GET',  `/tasks/succession/${pid}`),
   getSeasonalTasks:     ()     => api.req('GET',  '/tasks/seasonal'),
   createSeasonalTask:   (d)    => api.req('POST', '/tasks/seasonal', d),
@@ -318,6 +319,20 @@ function updateScaleLabel() {
 
 function pxPerUnit() { return PX * S.zoom }
 
+// Which bed is under this point? Containers get a proper ellipse test so the
+// corners of their bounding box still count as grass.
+function bedAtPoint(pt) {
+  return S.beds.find(b => {
+    if (pt.x < b.x || pt.x > b.x + b.width || pt.y < b.y || pt.y > b.y + b.height) return false
+    if (b.kind === 'container') {
+      const nx = (pt.x - b.x - b.width / 2) / (b.width / 2)
+      const ny = (pt.y - b.y - b.height / 2) / (b.height / 2)
+      return nx * nx + ny * ny <= 1
+    }
+    return true
+  })
+}
+
 function svgCoords(e) {
   const svg = $('garden-svg')
   const rect = svg.getBoundingClientRect()
@@ -507,7 +522,7 @@ function initCanvas() {
     e.preventDefault()
     const pt = svgCoords(e)
     const px = pxPerUnit()
-    const bed = S.beds.find(b => pt.x>=b.x && pt.x<=b.x+b.width && pt.y>=b.y && pt.y<=b.y+b.height)
+    const bed = bedAtPoint(pt)
     // Highlight drop target bed
     svg.querySelectorAll('rect[data-bedid]').forEach(r => {
       const isTarget = bed && r.parentElement.dataset.bedid == bed.id
@@ -531,7 +546,7 @@ function initCanvas() {
     const spid = e.dataTransfer.getData('spid')
     if (!spid) return
     const pt = svgCoords(e)
-    const bed = S.beds.find(b => pt.x>=b.x && pt.x<=b.x+b.width && pt.y>=b.y && pt.y<=b.y+b.height)
+    const bed = bedAtPoint(pt)
     if (!bed) return
     // Select the bed and place plant at drop position
     S.selectedBed = bed
@@ -694,6 +709,12 @@ function redrawCanvas() {
       if (p.x_pos != null && p.y_pos != null) {
         originX = bx + p.x_pos * px
         originY = by + p.y_pos * px
+      } else if (isContainer) {
+        // Pots: centre unpositioned plants in a row across the middle
+        const unpos = bp.filter(q => q.x_pos == null)
+        const idx = unpos.indexOf(p)
+        originX = bx + bw/2 - ((unpos.length - 1) * ICON_STEP) / 2 + idx * ICON_STEP
+        originY = by + bh/2
       } else {
         const idx = bp.filter(q => q.x_pos == null).indexOf(p)
         const cols = Math.max(1, Math.floor(bw / ICON_STEP))
@@ -1092,6 +1113,18 @@ async function loadTasks() {
     ${taskGroup('Coming up', soon)}
     ${taskGroup('Routine reminders', routine)}
   </div>`
+
+  // Tick-off buttons: record completion, then refresh the list
+  view.querySelectorAll('[data-taskkey]').forEach(btn => {
+    btn.onclick = async () => {
+      btn.disabled = true
+      try {
+        await api.completeTask(btn.dataset.taskkey)
+        showToast('✓ Done — nice work', 'good', 2500)
+        loadTasks()
+      } catch(err) { console.error('complete failed', err); btn.disabled = false }
+    }
+  })
 }
 
 function taskGroup(title, tasks) {
@@ -1108,6 +1141,7 @@ function taskCard(t) {
       <div class="task-desc">${esc(t.description)}</div>
       ${t.bed_name?`<div class="task-meta">📍 ${esc(t.bed_name)}</div>`:''}
     </div>
+    ${t.key?`<button class="btn btn-secondary btn-sm task-done-btn" data-taskkey="${esc(t.key)}" title="Mark done">✓</button>`:''}
   </div>`
 }
 

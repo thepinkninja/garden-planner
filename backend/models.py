@@ -73,6 +73,19 @@ class PlantPlacement(Base):
     species = relationship("PlantSpecies", back_populates="placements")
 
 
+class TaskCompletion(Base):
+    """A record that a generated task was ticked off.
+
+    `key` identifies the task instance, e.g. "feed:12" (placement 12),
+    "water:12", or "seasonal:3:2026-07" (seasonal task 3 for July 2026).
+    The latest completion per key drives when the task next appears.
+    """
+    __tablename__ = "task_completions"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, nullable=False, index=True)
+    completed_date = Column(Date, nullable=False)
+
+
 class SeasonalTask(Base):
     __tablename__ = "seasonal_tasks"
     id = Column(Integer, primary_key=True, index=True)

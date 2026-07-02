@@ -44,5 +44,8 @@
 <div id="toast-stack"></div>
 
 <script src="/static/app.js?v=10"></script>
+<script>
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
+</script>
 </body>
 </html>

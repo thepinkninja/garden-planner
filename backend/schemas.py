@@ -203,3 +203,4 @@ class TaskItem(BaseModel):
     placement_id: Optional[int] = None
     bed_name: Optional[str] = None
     plant_name: Optional[str] = None
+    key: Optional[str] = None  # completion key; None = not tickable (e.g. harvest)
