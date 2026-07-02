@@ -771,7 +771,7 @@ function renderSidePanel() {
               <div class="pi-meta">Planted ${fmt(p.planted_date)}${p.harvested_date?' · Harvested '+fmt(p.harvested_date):''}</div>
             </div>
             <div class="pi-actions">
-              ${!p.harvested_date?`<button class="btn btn-secondary btn-sm" data-harvest="${p.id}" title="Mark harvested">✓</button>`:''}
+              ${!p.harvested_date?`<button class="btn btn-secondary btn-sm" data-harvest="${p.id}" title="Mark harvested">✓</button>`:`<button class="btn btn-secondary btn-sm" data-unharvest="${p.id}" title="Undo harvest">↩</button>`}
               <button class="btn btn-secondary btn-sm" data-del-place="${p.id}" title="Remove">✕</button>
             </div>
           </div>`).join('')}
@@ -830,6 +830,13 @@ function renderSidePanel() {
       S.placements=S.placements.map(p=>p.id===updated.id?updated:p)
       redrawCanvas(); renderSidePanel()
       showSuccessionModal(updated)
+    }
+  })
+  panel.querySelectorAll('[data-unharvest]').forEach(btn => {
+    btn.onclick = async () => {
+      const updated = await api.updatePlacement(btn.dataset.unharvest, {harvested_date: null})
+      S.placements=S.placements.map(p=>p.id===updated.id?updated:p)
+      redrawCanvas(); renderSidePanel()
     }
   })
   panel.querySelectorAll('[data-del-place]').forEach(btn => {

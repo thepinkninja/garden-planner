@@ -89,6 +89,27 @@ class PlantSpeciesCreate(BaseModel):
     is_custom: bool = True
 
 
+class PlantSpeciesUpdate(BaseModel):
+    name: Optional[str] = None
+    family: Optional[str] = None
+    sow_indoor_start: Optional[int] = None
+    sow_indoor_end: Optional[int] = None
+    sow_outdoor_start: Optional[int] = None
+    sow_outdoor_end: Optional[int] = None
+    plant_out_start: Optional[int] = None
+    plant_out_end: Optional[int] = None
+    days_to_harvest_min: Optional[int] = None
+    days_to_harvest_max: Optional[int] = None
+    feeding_notes: Optional[str] = None
+    feeding_frequency_days: Optional[int] = None
+    watering_notes: Optional[str] = None
+    spacing_cm: Optional[int] = None
+    companion_plants: Optional[str] = None
+    avoid_plants: Optional[str] = None
+    notes: Optional[str] = None
+    is_custom: Optional[bool] = None
+
+
 class PlantSpeciesOut(BaseModel):
     id: int
     name: str

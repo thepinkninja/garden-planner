@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import PlantSpecies
-from schemas import PlantSpeciesCreate, PlantSpeciesOut
+from schemas import PlantSpeciesCreate, PlantSpeciesOut, PlantSpeciesUpdate
 
 router = APIRouter(prefix="/api/species", tags=["species"])
 
@@ -30,11 +30,13 @@ def get_species(species_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{species_id}", response_model=PlantSpeciesOut)
-def update_species(species_id: int, data: PlantSpeciesCreate, db: Session = Depends(get_db)):
+def update_species(species_id: int, data: PlantSpeciesUpdate, db: Session = Depends(get_db)):
     s = db.query(PlantSpecies).filter(PlantSpecies.id == species_id).first()
     if not s:
         raise HTTPException(404, "Species not found")
-    for k, v in data.model_dump(exclude_none=True).items():
+    # exclude_unset (not exclude_none): only touch fields the client sent,
+    # and allow explicitly sending null to clear a field
+    for k, v in data.model_dump(exclude_unset=True).items():
         setattr(s, k, v)
     db.commit()
     db.refresh(s)

@@ -91,7 +91,9 @@ def update_placement(placement_id: int, data: PlantPlacementUpdate, db: Session 
     placement = db.query(PlantPlacement).filter(PlantPlacement.id == placement_id).first()
     if not placement:
         raise HTTPException(404, "Placement not found")
-    for k, v in data.model_dump(exclude_none=True).items():
+    # exclude_unset (not exclude_none): only touch fields the client sent,
+    # and allow explicit nulls — e.g. {"harvested_date": null} to un-harvest
+    for k, v in data.model_dump(exclude_unset=True).items():
         setattr(placement, k, v)
     db.commit()
     db.refresh(placement)

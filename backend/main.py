@@ -116,7 +116,8 @@ def export_json():
                   "width_units": g.width_units, "height_units": g.height_units, "beds": []}
             for b in g.beds:
                 bd = {"id": b.id, "name": b.name, "x": b.x, "y": b.y,
-                      "width": b.width, "height": b.height, "color": b.color, "placements": []}
+                      "width": b.width, "height": b.height, "color": b.color,
+                      "kind": b.kind, "placements": []}
                 for p in b.placements:
                     bd["placements"].append({
                         "id": p.id, "species_id": p.species_id,
@@ -124,6 +125,7 @@ def export_json():
                         "planted_date": str(p.planted_date),
                         "quantity": p.quantity, "notes": p.notes,
                         "harvested_date": str(p.harvested_date) if p.harvested_date else None,
+                        "x_pos": p.x_pos, "y_pos": p.y_pos,
                     })
                 gd["beds"].append(bd)
             result["gardens"].append(gd)

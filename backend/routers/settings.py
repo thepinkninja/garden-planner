@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
@@ -6,18 +7,22 @@ from schemas import AppSettingSchema
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-DEFAULTS = {
-    "last_frost_date": "2025-04-15",
-    "first_frost_date": "2025-10-31",
-    "region": "UK",
-    "grid_px_per_unit": "40",
-}
+def _defaults() -> dict:
+    # Frost defaults are typical UK dates, computed for the current year
+    # so they never go stale. Overridden by anything saved in Settings.
+    year = date.today().year
+    return {
+        "last_frost_date": f"{year}-04-15",
+        "first_frost_date": f"{year}-10-31",
+        "region": "UK",
+        "grid_px_per_unit": "40",
+    }
 
 
 @router.get("/")
 def get_settings(db: Session = Depends(get_db)) -> dict:
     rows = db.query(AppSettings).all()
-    result = dict(DEFAULTS)
+    result = _defaults()
     for r in rows:
         result[r.key] = r.value
     return result
