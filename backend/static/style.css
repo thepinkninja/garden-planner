@@ -23,6 +23,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .view{height:100%;overflow:auto}
 .hidden{display:none!important}
 
+/* Toasts */
+#toast-stack{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;max-width:92vw}
+.toast{background:#333;color:#fff;padding:10px 16px;border-radius:8px;font-size:.85rem;box-shadow:0 4px 14px rgba(0,0,0,.3);animation:toast-in .25s ease;max-width:420px;text-align:center}
+.toast.warn{background:#a04818}
+.toast.good{background:var(--green-dark)}
+.toast.fade{opacity:0;transition:opacity .4s}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
 /* Garden tab button */
 .garden-tab{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:16px;cursor:pointer;font-size:.85rem}
 .garden-tab:hover{background:rgba(255,255,255,.25)}
@@ -66,13 +74,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .bed-kind-toggle .kind-btn.active{background:var(--green-dark,#2e5d34);color:#fff}
 .canvas-scroll{flex:1;overflow:auto;padding:16px}
 .canvas-wrap{display:inline-block;cursor:crosshair}
-.garden-svg{display:block;background:#4a8030;border:3px solid #3a6020;border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,0.25)}
+.garden-svg{display:block;background:#4a8030;border:3px solid #3a6020;border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,0.25);touch-action:pan-x pan-y}
+/* Touch: dragging on plant icons/beds goes to our pointer handlers, not scrolling.
+   Grass (the svg itself) still allows panning. */
+.garden-svg [data-placeid],.garden-svg [data-bedid]{touch-action:none}
 
 /* Plant palette */
 .plant-palette{flex-shrink:0;background:#2a3d1a;border-top:2px solid #1a2a0e;padding:10px 12px}
 .palette-label{font-size:.75rem;color:rgba(255,255,255,.6);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
 .palette-items{display:flex;flex-wrap:wrap;gap:6px}
 .palette-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:8px;cursor:grab;white-space:nowrap;transition:background .15s,transform .1s;user-select:none;min-width:54px}
+.palette-item.armed{background:#e8a020;border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
 .palette-item:hover{background:rgba(255,255,255,.22);transform:translateY(-2px)}
 .palette-item:active{cursor:grabbing;transform:translateY(0)}
 .palette-emoji{font-size:1.5rem;line-height:1}
@@ -183,7 +195,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* Responsive */
 @media(max-width:640px){
   .garden-layout{flex-direction:column}
-  .side-panel{width:100%;min-width:0;border-left:none;border-top:1px solid var(--border);max-height:50vh}
+  .side-panel{width:100%;min-width:0;border-left:none;border-top:1px solid var(--border);max-height:45vh}
   .plant-admin{flex-direction:column}
   .plant-list-panel{width:100%;min-width:0;border-right:none;border-bottom:1px solid var(--border);max-height:180px}
+  /* Keep the palette compact so the canvas gets the screen; bigger touch targets */
+  .palette-items{max-height:120px;overflow-y:auto}
+  .palette-item{min-width:60px;padding:8px 10px}
+  .btn-sm{padding:7px 12px}
+  .canvas-toolbar{gap:6px;padding:6px 8px}
 }

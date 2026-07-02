@@ -3,8 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#2a5738"/>
   <title>Garden Planner</title>
-  <link rel="stylesheet" href="/static/style.css?v=5"/>
+  <link rel="manifest" href="/static/manifest.webmanifest"/>
+  <link rel="icon" type="image/png" href="/static/icon-192.png"/>
+  <link rel="apple-touch-icon" href="/static/icon-192.png"/>
+  <link rel="stylesheet" href="/static/style.css?v=6"/>
 </head>
 <body>
 
@@ -36,6 +40,9 @@
   <div id="modal-content" class="modal"></div>
 </div>
 
-<script src="/static/app.js?v=9"></script>
+<!-- Toast notifications -->
+<div id="toast-stack"></div>
+
+<script src="/static/app.js?v=10"></script>
 </body>
 </html>

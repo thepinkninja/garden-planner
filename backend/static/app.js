@@ -18,6 +18,48 @@ function plantEmoji(name) {
   for (const [k, v] of Object.entries(PLANT_EMOJI)) { if (key.includes(k)) return v }
   return '🌱'
 }
+
+/* Toast notifications — non-blocking, auto-dismiss */
+function showToast(msg, kind = '', ms = 5000) {
+  const stack = $('toast-stack')
+  if (!stack) return
+  const t = document.createElement('div')
+  t.className = 'toast' + (kind ? ' ' + kind : '')
+  t.textContent = msg
+  stack.appendChild(t)
+  setTimeout(() => { t.classList.add('fade'); setTimeout(() => t.remove(), 450) }, ms)
+}
+
+/* Companion planting check — uses the species' companion_plants / avoid_plants
+   free-text lists, matching tokens against other species' names and families
+   (case-insensitive, tolerant of plurals like "brassicas"). */
+function companionCheck(bed, speciesId) {
+  const sp = S.species.find(s => s.id === speciesId)
+  if (!sp || !bed) return
+  const otherIds = [...new Set(S.placements
+    .filter(p => p.bed_id === bed.id && !p.harvested_date && p.species_id !== speciesId)
+    .map(p => p.species_id))]
+  const others = otherIds.map(id => S.species.find(s => s.id === id)).filter(Boolean)
+
+  const tokenMatch = (tokens, other) => (tokens || '').split(',').some(tok => {
+    let t = tok.trim().toLowerCase()
+    if (!t) return false
+    if (t.endsWith('s')) t = t.slice(0, -1)   // brassicas → brassica, beans → bean
+    const name = other.name.toLowerCase()
+    const fam = (other.family || '').toLowerCase()
+    return name.includes(t) || t.includes(name) || (fam && (fam.includes(t) || t.includes(fam)))
+  })
+
+  const warns = [], goods = []
+  for (const o of others) {
+    if (tokenMatch(sp.avoid_plants, o) || tokenMatch(o.avoid_plants, sp))
+      warns.push(`${sp.name} and ${o.name} don't grow well together`)
+    else if (tokenMatch(sp.companion_plants, o) || tokenMatch(o.companion_plants, sp))
+      goods.push(`${sp.name} + ${o.name} are good companions`)
+  }
+  warns.slice(0, 2).forEach(w => showToast('⚠️ ' + w + ` (${bed.name})`, 'warn', 7000))
+  if (!warns.length) goods.slice(0, 1).forEach(g => showToast('🤝 ' + g, 'good'))
+}
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const FAMILIES = ['allium','brassica','cucurbit','fruit','herb','leaf','legume','nightshade','root','other']
@@ -32,6 +74,7 @@ const S = {
   zoom: 1,
   drawing: null,       // { x1,y1,x2,y2 }
   newBedKind: 'raised',// what a freshly-drawn bed will be: 'raised' or 'container'
+  armedSpecies: null,  // species selected in the palette by tap — next tap on a bed plants it (touch-friendly alternative to drag)
   iconDrag: null,      // { placeid, placeindex, placement, bed, startPt, startX, startY, curX, curY }
   plantFilter: '',
   selectedSpecies: null,
@@ -245,11 +288,25 @@ function renderPlantPalette() {
       <span class="palette-name">${esc(sp.name.split(' ')[0])}</span>
     </div>`
   }).join('')
-  // Dragstart: store species id
+  // Dragstart: store species id (desktop drag-and-drop)
   el.querySelectorAll('.palette-item').forEach(item => {
     item.addEventListener('dragstart', e => {
       e.dataTransfer.setData('spid', item.dataset.spid)
       e.dataTransfer.effectAllowed = 'copy'
+    })
+    // Tap to arm/disarm (touch-friendly): armed species plants on the next bed tap
+    item.addEventListener('click', () => {
+      const sp = S.species.find(s => s.id == item.dataset.spid)
+      if (!sp) return
+      if (S.armedSpecies?.id === sp.id) {
+        S.armedSpecies = null
+        showToast('Planting mode off', '', 2000)
+      } else {
+        S.armedSpecies = sp
+        showToast(`${plantEmoji(sp.name)} Tap a bed to plant ${sp.name} — tap the tile again to stop`, 'good', 4500)
+      }
+      el.querySelectorAll('.palette-item').forEach(i =>
+        i.classList.toggle('armed', i.dataset.spid == (S.armedSpecies?.id ?? -1)))
     })
   })
 }
@@ -279,12 +336,14 @@ function initCanvas() {
   // S.iconDrag = { placeid, placeindex, placement, bed, curX, curY } — in grid units relative to bed origin
   // curX/curY are updated on every mousemove and used by redrawCanvas to render the ghost
 
-  svg.addEventListener('mousedown', e => {
+  // Pointer events (not mouse events) so everything also works on touch screens
+  svg.addEventListener('pointerdown', e => {
     // Priority 1: dragging an existing plant icon
     const iconEl = e.target.closest('[data-placeid]')
     if (iconEl) {
       e.preventDefault()
       e.stopPropagation()
+      try { svg.setPointerCapture(e.pointerId) } catch(_) {}
       const placeid = iconEl.dataset.placeid
       const placeindex = parseInt(iconEl.dataset.placeindex || '0')
       const placement = S.placements.find(p => p.id == placeid)
@@ -316,7 +375,7 @@ function initCanvas() {
     S.drawing = { x1:pt.x, y1:pt.y, x2:pt.x, y2:pt.y }
   })
 
-  svg.addEventListener('mousemove', e => {
+  svg.addEventListener('pointermove', e => {
     // Move icon drag — update position in state and redraw
     if (S.iconDrag) {
       const pt = svgCoords(e)
@@ -336,8 +395,8 @@ function initCanvas() {
     updatePreviewRect()
   })
 
-  // Also handle mouseup on document so drops outside the SVG are caught
-  document.addEventListener('mouseup', async e => {
+  // Also handle release on document so drops outside the SVG are caught
+  document.addEventListener('pointerup', async e => {
     if (!S.iconDrag) return
     const drag = S.iconDrag
     S.iconDrag = null
@@ -365,8 +424,8 @@ function initCanvas() {
     redrawCanvas(); renderSidePanel()
   })
 
-  svg.addEventListener('mouseup', async e => {
-    // Icon drag is handled by document mouseup above
+  svg.addEventListener('pointerup', async e => {
+    // Icon drag is handled by document pointerup above
     if (S.iconDrag) return
     if (!S.drawing) return
     const pt = svgCoords(e)
@@ -387,7 +446,7 @@ function initCanvas() {
   })
 
   // click handles bed selection and plant placement (works with touch & simulated clicks)
-  svg.addEventListener('click', e => {
+  svg.addEventListener('click', async e => {
     if (drawMoved) return  // ignore click that ended a draw gesture
     if (iconDragMoved) { iconDragMoved = false; return }  // ignore click that ended an icon drag
 
@@ -398,6 +457,23 @@ function initCanvas() {
     if (bedId) {
       const bed = S.beds.find(b => b.id == bedId)
       if (!bed) return
+      // Armed species from the palette → plant it right where they tapped
+      if (S.armedSpecies) {
+        const pt = svgCoords(e)
+        const xPos = +(Math.max(0.3, Math.min(bed.width - 0.3, pt.x - bed.x))).toFixed(2)
+        const yPos = +(Math.max(0.3, Math.min(bed.height - 0.3, pt.y - bed.y))).toFixed(2)
+        try {
+          const p = await api.addPlacement(bed.id, {
+            species_id: S.armedSpecies.id, planted_date: todayStr(),
+            quantity: 1, x_pos: +xPos, y_pos: +yPos,
+          })
+          S.placements.push(p)
+          S.selectedBed = bed
+          redrawCanvas(); renderSidePanel()
+          companionCheck(bed, S.armedSpecies.id)
+        } catch(err) { console.error('Tap placement failed', err) }
+        return
+      }
       if (S.selectedBed?.id == bed.id) {
         // Second click on already-selected bed → place plant at this spot
         const pt = svgCoords(e)
@@ -422,7 +498,7 @@ function initCanvas() {
     }
   })
 
-  svg.addEventListener('mouseleave', () => {
+  svg.addEventListener('pointerleave', () => {
     if (S.drawing) { S.drawing=null; drawMoved=false; removePreviewRect() }
   })
 
@@ -471,6 +547,7 @@ function initCanvas() {
       })
       S.placements.push(p)
       redrawCanvas(); renderSidePanel()
+      companionCheck(bed, parseInt(spid))
     } catch(err) { console.error('Drop placement failed', err) }
     // Reset highlights
     svg.querySelectorAll('rect[data-bedid]').forEach(r => {
@@ -720,7 +797,31 @@ function renderSidePanel() {
     ? '<b>' + esc(S.selectedBed.name) + '</b> selected — drag a plant onto it, or click inside to place.'
     : 'Click a bed to select it, or draw a rectangle to create a new bed.'
   if (!S.selectedBed) {
-    panel.innerHTML = `<div class="panel-section"><p class="panel-hint">Click a bed to select it, or draw a rectangle on the canvas to create a new bed.</p></div>`
+    panel.innerHTML = `<div class="panel-section">
+      <p class="panel-hint">Click a bed to select it, or draw a rectangle on the canvas to create a new bed.</p>
+      <button class="btn btn-primary btn-sm" id="quick-add-bed" style="margin-top:10px">+ Add ${S.newBedKind === 'container' ? 'container' : 'bed'}</button>
+      <p class="panel-hint" style="margin-top:6px;font-size:.75rem">Handy on touch screens — adds one you can then resize.</p>
+    </div>`
+    // Touch-friendly bed creation: place a default-size bed in a free spot
+    $('quick-add-bed').onclick = async () => {
+      const kind = S.newBedKind || 'raised'
+      const w = kind === 'container' ? 2 : 4, h = kind === 'container' ? 2 : 3
+      // Find a free position scanning the grid
+      const g2 = S.activeGarden
+      let x = 1, y = 1
+      outer: for (let ty = 1; ty <= g2.height_units - h - 1; ty++) {
+        for (let tx = 1; tx <= g2.width_units - w - 1; tx++) {
+          const clash = S.beds.some(b => tx < b.x + b.width + 0.5 && tx + w + 0.5 > b.x && ty < b.y + b.height + 0.5 && ty + h + 0.5 > b.y)
+          if (!clash) { x = tx; y = ty; break outer }
+        }
+      }
+      const color = BED_COLORS[S.beds.length % BED_COLORS.length]
+      const label = kind === 'container' ? 'Pot' : 'Bed'
+      const bed = await api.createBed(g2.id, { name: `${label} ${S.beds.length + 1}`, x, y, width: w, height: h, color, kind })
+      S.beds.push(bed)
+      S.selectedBed = bed
+      redrawCanvas(); renderSidePanel()
+    }
     return
   }
   const bed = S.selectedBed
@@ -907,6 +1008,7 @@ function showPlantPicker() {
     }
     S.pendingPos = null
     closeModal(); redrawCanvas(); renderSidePanel()
+    companionCheck(S.selectedBed, pickerSelected.id)
   }
 }
 
