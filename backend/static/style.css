@@ -120,6 +120,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .task-card{display:flex;gap:10px;padding:10px 14px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--border);border-radius:var(--radius);margin-bottom:6px;align-items:center}
 .task-body{flex:1}
 .task-done-btn{flex-shrink:0;font-size:1rem;min-width:36px;min-height:36px}
+
+/* Harvest journal */
+.journal-summary{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 14px}
+.journal-summary-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.9rem}
+.journal-summary-row:last-child{border-bottom:none}
+.js-name{font-weight:600}
+.js-amount{color:var(--text-muted);text-align:right}
+.pi-variety{color:var(--text-muted);font-weight:400;font-style:italic}
 .task-card.now{border-left-color:#dc2626}
 .task-card.soon{border-left-color:#f59e0b}
 .task-card.routine{border-left-color:var(--green)}

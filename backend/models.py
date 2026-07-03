@@ -65,12 +65,28 @@ class PlantPlacement(Base):
     species_id = Column(Integer, ForeignKey("plant_species.id"), nullable=False)
     planted_date = Column(Date, nullable=False)
     quantity = Column(Integer, default=1)
+    variety = Column(String, nullable=True)   # e.g. "Gardener's Delight"
     notes = Column(Text)
-    harvested_date = Column(Date, nullable=True)
+    harvested_date = Column(Date, nullable=True)  # set = plant finished / removed
     x_pos = Column(Float, nullable=True)   # grid units relative to bed origin
     y_pos = Column(Float, nullable=True)
     bed = relationship("Bed", back_populates="placements")
     species = relationship("PlantSpecies", back_populates="placements")
+    harvests = relationship("HarvestLog", back_populates="placement", cascade="all, delete-orphan")
+
+
+class HarvestLog(Base):
+    """One picking. Crops like courgettes are harvested many times per plant,
+    so a placement can have many logs; harvested_date on the placement only
+    means the plant is finished."""
+    __tablename__ = "harvest_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    placement_id = Column(Integer, ForeignKey("plant_placements.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    quantity = Column(Float, nullable=True)   # optional amount
+    unit = Column(String, nullable=True)      # kg | g | count | bunches
+    notes = Column(Text)
+    placement = relationship("PlantPlacement", back_populates="harvests")
 
 
 class TaskCompletion(Base):

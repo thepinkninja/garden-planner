@@ -114,6 +114,9 @@ const api = {
   deleteSpecies:        (id)   => api.req('DELETE',`/species/${id}`),
   getTasks:             (gid)  => api.req('GET',  `/tasks/${gid?'?garden_id='+gid:''}`),
   completeTask:         (key)  => api.req('POST', '/tasks/complete', {key}),
+  logHarvest:           (pid,d)=> api.req('POST', `/harvests/${pid}`, d),
+  getHarvests:          (gid)  => api.req('GET',  `/harvests/${gid?'?garden_id='+gid:''}`),
+  deleteHarvest:        (id)   => api.req('DELETE',`/harvests/${id}`),
   getSuccession:        (pid)  => api.req('GET',  `/tasks/succession/${pid}`),
   getSeasonalTasks:     ()     => api.req('GET',  '/tasks/seasonal'),
   createSeasonalTask:   (d)    => api.req('POST', '/tasks/seasonal', d),
@@ -172,6 +175,7 @@ function switchTab(tab) {
   if (tab==='tasks')  loadTasks()
   if (tab==='plants') renderPlantView()
   if (tab==='seasonal') loadSeasonal()
+  if (tab==='journal') loadJournal()
   if (tab==='settings') renderSettings()
 }
 
@@ -889,11 +893,11 @@ function renderSidePanel() {
         ${bp.map(p => `
           <div class="placement-item${p.harvested_date?' harvested':''}">
             <div>
-              <div class="pi-name">${esc(p.species_name)}${p.quantity>1?' ×'+p.quantity:''}</div>
-              <div class="pi-meta">Planted ${fmt(p.planted_date)}${p.harvested_date?' · Harvested '+fmt(p.harvested_date):''}</div>
+              <div class="pi-name">${esc(p.species_name)}${p.variety?` <span class="pi-variety">· ${esc(p.variety)}</span>`:''}${p.quantity>1?' ×'+p.quantity:''}</div>
+              <div class="pi-meta">Planted ${fmt(p.planted_date)}${p.harvested_date?' · Finished '+fmt(p.harvested_date):''}</div>
             </div>
             <div class="pi-actions">
-              ${!p.harvested_date?`<button class="btn btn-secondary btn-sm" data-harvest="${p.id}" title="Mark harvested">✓</button>`:`<button class="btn btn-secondary btn-sm" data-unharvest="${p.id}" title="Undo harvest">↩</button>`}
+              ${!p.harvested_date?`<button class="btn btn-secondary btn-sm" data-harvest="${p.id}" title="Log a harvest">🧺</button>`:`<button class="btn btn-secondary btn-sm" data-unharvest="${p.id}" title="Undo finished">↩</button>`}
               <button class="btn btn-secondary btn-sm" data-del-place="${p.id}" title="Remove">✕</button>
             </div>
           </div>`).join('')}
@@ -947,11 +951,9 @@ function renderSidePanel() {
 
   // Harvest / delete placements
   panel.querySelectorAll('[data-harvest]').forEach(btn => {
-    btn.onclick = async () => {
-      const updated = await api.updatePlacement(btn.dataset.harvest, {harvested_date: todayStr()})
-      S.placements=S.placements.map(p=>p.id===updated.id?updated:p)
-      redrawCanvas(); renderSidePanel()
-      showSuccessionModal(updated)
+    btn.onclick = () => {
+      const p = S.placements.find(q => q.id == btn.dataset.harvest)
+      if (p) showHarvestModal(p)
     }
   })
   panel.querySelectorAll('[data-unharvest]').forEach(btn => {
@@ -996,8 +998,13 @@ function showPlantPicker() {
       </div>
     </div>
     <div class="form-group" style="margin-top:8px">
+      <label>Variety (optional)</label>
+      <input type="text" id="picker-variety" list="variety-options" placeholder="e.g. Gardener's Delight">
+      <datalist id="variety-options"></datalist>
+    </div>
+    <div class="form-group" style="margin-top:8px">
       <label>Notes (optional)</label>
-      <input type="text" id="picker-notes" placeholder="e.g. variety, pot size...">
+      <input type="text" id="picker-notes" placeholder="e.g. pot size, position...">
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -1014,6 +1021,7 @@ function showPlantPicker() {
     if (!pickerSelected) return
     const qty = parseInt($('picker-qty').value)||1
     const date = $('picker-date').value
+    const variety = $('picker-variety').value.trim()||null
     const notes = $('picker-notes').value||null
     // Create one record per plant so each can be positioned individually
     for (let i = 0; i < qty; i++) {
@@ -1021,6 +1029,7 @@ function showPlantPicker() {
         species_id: pickerSelected.id,
         planted_date: date,
         quantity: 1,
+        variety,
         notes,
         x_pos: S.pendingPos?.x ?? null,
         y_pos: S.pendingPos?.y ?? null,
@@ -1030,6 +1039,67 @@ function showPlantPicker() {
     S.pendingPos = null
     closeModal(); redrawCanvas(); renderSidePanel()
     companionCheck(S.selectedBed, pickerSelected.id)
+  }
+}
+
+/* ============================================================
+   Harvest logging
+   ============================================================ */
+function showHarvestModal(p) {
+  const UNITS = ['kg', 'g', 'count', 'bunches']
+  // Remember the unit last used for this species (courgettes counted, spuds weighed)
+  const savedUnit = localStorage.getItem('harvest-unit:' + p.species_id) || 'kg'
+  openModal(`
+    <h2>🧺 Log harvest</h2>
+    <p class="subtitle">${esc(p.species_name)}${p.variety?` · ${esc(p.variety)}`:''} — ${esc(S.beds.find(b=>b.id===p.bed_id)?.name||'')}</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="hv-date" value="${todayStr()}">
+      </div>
+      <div class="form-group">
+        <label>Amount (optional)</label>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="hv-qty" min="0" step="any" placeholder="e.g. 1.5" style="flex:1;min-width:0">
+          <select id="hv-unit">${UNITS.map(u=>`<option${u===savedUnit?' selected':''}>${u}</option>`).join('')}</select>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label>Notes (optional)</label>
+      <input type="text" id="hv-notes" placeholder="e.g. best picking yet">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+      <input type="checkbox" id="hv-finished" style="width:18px;height:18px">
+      <span>Plant is finished — remove it from the bed</span>
+    </label>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="hv-save">Log harvest</button>
+    </div>`)
+
+  $('hv-save').onclick = async () => {
+    const qty = parseFloat($('hv-qty').value)
+    const unit = $('hv-unit').value
+    const finished = $('hv-finished').checked
+    try {
+      await api.logHarvest(p.id, {
+        date: $('hv-date').value,
+        quantity: isNaN(qty) ? null : qty,
+        unit: isNaN(qty) ? null : unit,
+        notes: $('hv-notes').value || null,
+        finished,
+      })
+      if (!isNaN(qty)) localStorage.setItem('harvest-unit:' + p.species_id, unit)
+      closeModal()
+      showToast('🧺 Harvest logged' + (finished ? ' — plant finished' : ''), 'good')
+      if (finished) {
+        const updated = { ...p, harvested_date: $('hv-date').value }
+        S.placements = S.placements.map(q => q.id === p.id ? updated : q)
+        redrawCanvas(); renderSidePanel()
+        showSuccessionModal(updated)
+      }
+    } catch(err) { console.error('harvest log failed', err); showToast('Could not log harvest', 'warn') }
   }
 }
 
@@ -1051,6 +1121,14 @@ function attachPickerClicks() {
       $('picker-list').querySelectorAll('.picker-item').forEach(i=>i.classList.remove('selected'))
       item.classList.add('selected')
       $('picker-add').disabled = false
+      // Offer varieties previously used for this species
+      const dl = $('variety-options')
+      if (dl) {
+        const used = [...new Set(S.placements
+          .filter(p => p.species_id === sp.id && p.variety)
+          .map(p => p.variety))]
+        dl.innerHTML = used.map(v => `<option value="${esc(v)}">`).join('')
+      }
       // Show info
       const info = $('picker-info')
       info.classList.remove('hidden')
@@ -1125,6 +1203,14 @@ async function loadTasks() {
       } catch(err) { console.error('complete failed', err); btn.disabled = false }
     }
   })
+  // Harvest tasks: open the log-harvest modal
+  view.querySelectorAll('[data-loghv]').forEach(btn => {
+    btn.onclick = () => {
+      const p = S.placements.find(q => q.id == btn.dataset.loghv)
+      if (p) showHarvestModal(p)
+      else showToast('Open the Garden tab first to load plants', 'warn')
+    }
+  })
 }
 
 function taskGroup(title, tasks) {
@@ -1142,7 +1228,62 @@ function taskCard(t) {
       ${t.bed_name?`<div class="task-meta">📍 ${esc(t.bed_name)}</div>`:''}
     </div>
     ${t.key?`<button class="btn btn-secondary btn-sm task-done-btn" data-taskkey="${esc(t.key)}" title="Mark done">✓</button>`:''}
+    ${t.type==='harvest'&&t.placement_id?`<button class="btn btn-secondary btn-sm task-done-btn" data-loghv="${t.placement_id}" title="Log a harvest">🧺</button>`:''}
   </div>`
+}
+
+/* ============================================================
+   Harvest journal
+   ============================================================ */
+async function loadJournal() {
+  const view = $('view-journal')
+  view.innerHTML = '<div class="tasks-view"><h1>📓 Harvest journal</h1><p style="color:var(--text-muted)">Loading…</p></div>'
+  const logs = await api.getHarvests(S.activeGarden?.id)
+  const year = String(new Date().getFullYear())
+
+  // Year summary — totals per species + variety
+  const groups = {}
+  logs.filter(l => l.date.startsWith(year)).forEach(l => {
+    const k = l.species_name + (l.variety ? ' · ' + l.variety : '')
+    groups[k] = groups[k] || { picks: 0, units: {} }
+    groups[k].picks++
+    if (l.quantity != null && l.unit) groups[k].units[l.unit] = (groups[k].units[l.unit] || 0) + l.quantity
+  })
+  const summaryRows = Object.entries(groups)
+    .sort((a, b) => b[1].picks - a[1].picks)
+    .map(([k, g]) => {
+      const amounts = Object.entries(g.units).map(([u, q]) => `${+q.toFixed(2)} ${u}`).join(', ')
+      return `<div class="journal-summary-row"><span class="js-name">${esc(k)}</span><span class="js-amount">${amounts || '—'} · ${g.picks} picking${g.picks > 1 ? 's' : ''}</span></div>`
+    }).join('')
+
+  // Log entries grouped by month, newest first
+  const byMonth = {}
+  logs.forEach(l => { const m = l.date.slice(0, 7); (byMonth[m] = byMonth[m] || []).push(l) })
+  const months = Object.keys(byMonth).sort().reverse()
+  const monthName = m => new Date(m + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  view.innerHTML = `<div class="tasks-view">
+    <h1>📓 Harvest journal</h1>
+    ${!logs.length ? '<p style="color:var(--text-muted)">Nothing logged yet. Use the 🧺 button on a plant (Garden tab) or on a harvest task to record a picking.</p>' : ''}
+    ${summaryRows ? `<div class="task-group"><h2>${year} totals</h2><div class="journal-summary">${summaryRows}</div></div>` : ''}
+    ${months.map(m => `<div class="task-group"><h2>${monthName(m)}</h2>${byMonth[m].map(l => `
+      <div class="task-card routine">
+        <div class="task-icon">🧺</div>
+        <div class="task-body">
+          <div class="task-title">${esc(l.species_name)}${l.variety ? ` · ${esc(l.variety)}` : ''}${l.quantity != null ? ` — ${l.quantity} ${esc(l.unit || '')}` : ''}</div>
+          <div class="task-desc">${fmt(l.date)} · 📍 ${esc(l.bed_name)}${l.notes ? ' · ' + esc(l.notes) : ''}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm task-done-btn" data-delhv="${l.id}" title="Delete entry">✕</button>
+      </div>`).join('')}</div>`).join('')}
+  </div>`
+
+  view.querySelectorAll('[data-delhv]').forEach(btn => {
+    btn.onclick = async () => {
+      await api.deleteHarvest(btn.dataset.delhv)
+      showToast('Entry deleted', '', 2000)
+      loadJournal()
+    }
+  })
 }
 
 /* ============================================================

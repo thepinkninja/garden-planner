@@ -70,6 +70,7 @@ def get_all_placements(garden_id: int, db: Session = Depends(get_db)):
             species_family=p.species.family,
             planted_date=p.planted_date,
             quantity=p.quantity,
+            variety=p.variety,
             notes=p.notes,
             harvested_date=p.harvested_date,
             x_pos=p.x_pos,

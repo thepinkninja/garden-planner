@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import database
 import models
-from routers import gardens, beds, species, tasks, settings as settings_router
+from routers import gardens, beds, species, tasks, harvests, settings as settings_router
 
 
 def seed_plants(db):
@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
     migrations = [
         ("plant_placements", "x_pos REAL"),
         ("plant_placements", "y_pos REAL"),
+        ("plant_placements", "variety TEXT"),
         ("beds", "kind TEXT DEFAULT 'raised'"),
     ]
     with database.engine.connect() as conn:
@@ -101,6 +102,7 @@ app.include_router(gardens.router)
 app.include_router(beds.router)
 app.include_router(species.router)
 app.include_router(tasks.router)
+app.include_router(harvests.router)
 app.include_router(settings_router.router)
 
 
@@ -123,9 +125,14 @@ def export_json():
                         "id": p.id, "species_id": p.species_id,
                         "species_name": p.species.name,
                         "planted_date": str(p.planted_date),
-                        "quantity": p.quantity, "notes": p.notes,
+                        "quantity": p.quantity, "variety": p.variety, "notes": p.notes,
                         "harvested_date": str(p.harvested_date) if p.harvested_date else None,
                         "x_pos": p.x_pos, "y_pos": p.y_pos,
+                        "harvests": [
+                            {"date": str(h.date), "quantity": h.quantity,
+                             "unit": h.unit, "notes": h.notes}
+                            for h in p.harvests
+                        ],
                     })
                 gd["beds"].append(bd)
             result["gardens"].append(gd)

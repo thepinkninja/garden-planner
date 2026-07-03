@@ -139,6 +139,7 @@ class PlantPlacementCreate(BaseModel):
     species_id: int
     planted_date: date
     quantity: int = 1
+    variety: Optional[str] = None
     notes: Optional[str] = None
     x_pos: Optional[float] = None
     y_pos: Optional[float] = None
@@ -147,6 +148,7 @@ class PlantPlacementCreate(BaseModel):
 class PlantPlacementUpdate(BaseModel):
     planted_date: Optional[date] = None
     quantity: Optional[int] = None
+    variety: Optional[str] = None
     notes: Optional[str] = None
     harvested_date: Optional[date] = None
     x_pos: Optional[float] = None
@@ -161,10 +163,34 @@ class PlantPlacementOut(BaseModel):
     species_family: Optional[str]
     planted_date: date
     quantity: int
+    variety: Optional[str] = None
     notes: Optional[str]
     harvested_date: Optional[date]
     x_pos: Optional[float]
     y_pos: Optional[float]
+
+    class Config:
+        from_attributes = True
+
+
+class HarvestLogCreate(BaseModel):
+    date: date
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+    finished: bool = False  # also mark the plant as done (sets harvested_date)
+
+
+class HarvestLogOut(BaseModel):
+    id: int
+    placement_id: int
+    date: date
+    quantity: Optional[float]
+    unit: Optional[str]
+    notes: Optional[str]
+    species_name: str
+    variety: Optional[str]
+    bed_name: str
 
     class Config:
         from_attributes = True
