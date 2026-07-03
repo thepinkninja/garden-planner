@@ -57,7 +57,31 @@ Then open `http://<host-ip>:8079`. Data is stored in `./data/garden.db`.
    - **Variable:** `DATABASE_URL` = `sqlite:////data/garden.db`
    - **Restart policy:** `unless-stopped`
 
-### Updating
+### Pre-built image (no building on the server)
+
+Every push to `main` publishes `ghcr.io/thepinkninja/garden-planner:latest`
+via GitHub Actions. On the server, reference the image instead of building:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/thepinkninja/garden-planner:latest
+    container_name: garden-planner
+    ports:
+      - "8079:8000"
+    volumes:
+      - /mnt/user/appdata/garden-planner/data:/data
+    environment:
+      - DATABASE_URL=sqlite:////data/garden.db
+    restart: unless-stopped
+```
+
+Unraid's Docker tab will then show "update ready" when a new image is
+published — apply it with one click. (If the GHCR package is private, run
+`docker login ghcr.io` on the server first; note Unraid forgets logins on
+reboot, so a public package is simplest.)
+
+### Updating (build-from-source method)
 
 ```bash
 docker compose down
