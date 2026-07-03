@@ -11,15 +11,21 @@ from routers import gardens, beds, species, tasks, harvests, settings as setting
 
 
 def seed_plants(db):
-    existing = db.query(models.PlantSpecies).count()
-    if existing > 0:
-        return
+    # Additive seeding: insert any stock plant not already present by name.
+    # New plants added to plants.json reach existing databases on update,
+    # without touching plants the user has edited. (Trade-off: a stock plant
+    # the user deleted will reappear after an update.)
     data_path = os.path.join(os.path.dirname(__file__), "data", "plants.json")
     with open(data_path, encoding="utf-8") as f:  # explicit: Windows defaults to cp1252
         plants = json.load(f)
+    existing_names = {name for (name,) in db.query(models.PlantSpecies.name).all()}
+    added = False
     for p in plants:
-        db.add(models.PlantSpecies(**p, is_custom=False))
-    db.commit()
+        if p["name"] not in existing_names:
+            db.add(models.PlantSpecies(**p, is_custom=False))
+            added = True
+    if added:
+        db.commit()
 
 
 def seed_seasonal_tasks(db):
