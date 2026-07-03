@@ -1476,21 +1476,69 @@ async function loadSeasonal() {
   renderSeasonal(tasks)
 }
 
+// Sow / plant-out / harvest windows for the crops actually in this garden —
+// not the whole plant database. Lets the calendar act as a year planner.
+function plantCalendarEvents() {
+  const events = []  // {month, icon, title, desc}
+  const active = S.placements.filter(p => !p.harvested_date)
+  const speciesIds = [...new Set(active.map(p => p.species_id))]
+  const short = m => MONTH_NAMES[m-1].slice(0,3)
+  const rangeLabel = (a,b) => a===b ? MONTH_NAMES[a-1] : `${short(a)}–${short(b)}`
+
+  speciesIds.forEach(id => {
+    const sp = S.species.find(s => s.id === id)
+    if (!sp) return
+    const win = (a, b, icon, verb) => {
+      if (!a || !b) return
+      for (let m = a; m <= b; m++)
+        events.push({ month: m, icon, title: `${verb} ${sp.name}`, desc: `Window: ${rangeLabel(a,b)}` })
+    }
+    win(sp.sow_indoor_start,  sp.sow_indoor_end,  '🌱', 'Sow indoors —')
+    win(sp.sow_outdoor_start, sp.sow_outdoor_end, '🌱', 'Sow outdoors —')
+    win(sp.plant_out_start,   sp.plant_out_end,   '🪴', 'Plant out —')
+  })
+
+  // Expected harvest windows from what's actually planted
+  const seen = new Set()
+  active.forEach(p => {
+    const sp = S.species.find(s => s.id === p.species_id)
+    if (!sp?.days_to_harvest_min || !sp?.days_to_harvest_max) return
+    const d1 = new Date(p.planted_date); d1.setDate(d1.getDate() + sp.days_to_harvest_min)
+    const d2 = new Date(p.planted_date); d2.setDate(d2.getDate() + sp.days_to_harvest_max)
+    const dfmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    const cur = new Date(d1.getFullYear(), d1.getMonth(), 1)
+    while (cur <= d2) {
+      const m = cur.getMonth() + 1
+      const k = sp.name + ':' + m
+      if (!seen.has(k)) {
+        seen.add(k)
+        events.push({ month: m, icon: '🧺', title: `Harvest ${sp.name}`, desc: `Expected ${dfmt(d1)} – ${dfmt(d2)}` })
+      }
+      cur.setMonth(cur.getMonth() + 1)
+    }
+  })
+  return events
+}
+
 function renderSeasonal(tasks) {
   const view = $('view-seasonal')
   const byMonth = {}
   tasks.forEach(t => { const k=t.month||0; (byMonth[k]||(byMonth[k]=[])).push(t) })
-  const monthKeys = Object.keys(byMonth).sort((a,b)=>+a-+b)
+  // Merge in the garden's plant timeline
+  const eventsByMonth = {}
+  plantCalendarEvents().forEach(ev => { (eventsByMonth[ev.month]||(eventsByMonth[ev.month]=[])).push(ev) })
+  const monthKeys = [...new Set([...Object.keys(byMonth), ...Object.keys(eventsByMonth)])].sort((a,b)=>+a-+b)
 
   view.innerHTML = `<div class="seasonal-view">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <h1>Seasonal calendar</h1>
       <button class="btn btn-primary btn-sm" id="new-seasonal-btn">+ Add task</button>
     </div>
+    <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:16px">Your year at a glance: general tasks plus sow, plant-out and harvest windows for the crops in this garden.</p>
     ${monthKeys.map(mk => `
       <div class="seasonal-month">
         <h2>${mk==='0'?'Any time':MONTH_NAMES[+mk-1]}</h2>
-        ${byMonth[mk].map(t=>`
+        ${(byMonth[mk]||[]).map(t=>`
           <div class="seasonal-item">
             <span style="font-size:1.2rem">📅</span>
             <div class="task-body">
@@ -1501,6 +1549,14 @@ function renderSeasonal(tasks) {
             <div style="display:flex;gap:4px;flex-shrink:0">
               <button class="btn btn-secondary btn-sm" data-edit-seasonal="${t.id}">Edit</button>
               <button class="btn btn-secondary btn-sm" data-del-seasonal="${t.id}">✕</button>
+            </div>
+          </div>`).join('')}
+        ${(eventsByMonth[mk]||[]).map(ev=>`
+          <div class="seasonal-item plant-event">
+            <span style="font-size:1.2rem">${ev.icon}</span>
+            <div class="task-body">
+              <div class="task-title">${esc(ev.title)}</div>
+              <div class="task-desc">${esc(ev.desc)}</div>
             </div>
           </div>`).join('')}
       </div>`).join('')}

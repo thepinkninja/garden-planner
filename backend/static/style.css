@@ -128,6 +128,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .js-name{font-weight:600}
 .js-amount{color:var(--text-muted);text-align:right}
 .pi-variety{color:var(--text-muted);font-weight:400;font-style:italic}
+
+/* Plant timeline entries on the seasonal calendar (read-only, derived from the garden) */
+.seasonal-item.plant-event{background:var(--green-light);border-color:transparent}
 .task-card.now{border-left-color:#dc2626}
 .task-card.soon{border-left-color:#f59e0b}
 .task-card.routine{border-left-color:var(--green)}
